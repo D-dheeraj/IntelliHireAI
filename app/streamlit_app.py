@@ -159,6 +159,35 @@ if page == "🔍 Analyze Resumes":
     </div>
     """, unsafe_allow_html=True)
 
+    # ── Check API Key ─────────────────────────────────────────────────────────────
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        try:
+            api_key = st.secrets.get("GEMINI_API_KEY")
+        except Exception:
+            pass
+
+    has_api_key = api_key is not None and len(api_key.strip()) > 0
+
+    if not has_api_key:
+        st.warning("🔑 **GEMINI_API_KEY is missing!**")
+        st.info("""
+        To run resume analysis, you need to configure your Google Gemini API key:
+        
+        ### ☁️ On Streamlit Cloud:
+        1. Go to your **Streamlit Community Cloud** dashboard.
+        2. Click on your app's options button (`...`) and select **Settings** -> **Secrets**.
+        3. Add the following line to the secrets box:
+           ```toml
+           GEMINI_API_KEY = "your_actual_api_key_here"
+           ```
+        4. Click **Save**. Streamlit will automatically reload the app with your key active!
+        
+        ### 💻 On your Local Machine:
+        - Add `GEMINI_API_KEY="your_api_key"` to the `.env` file in the project root directory.
+        """)
+        st.stop()
+
     col_up, col_job = st.columns([1,1], gap="large")
 
     with col_up:

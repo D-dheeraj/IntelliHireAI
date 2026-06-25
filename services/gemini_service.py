@@ -10,9 +10,28 @@ from google.genai.errors import APIError
 load_dotenv(override=True)
 
 
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY")
-)
+_client = None
+
+
+def get_gemini_client():
+    global _client
+    if _client is None:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            # Try to get from Streamlit secrets
+            try:
+                import streamlit as st
+                api_key = st.secrets.get("GEMINI_API_KEY")
+            except Exception:
+                pass
+
+        if not api_key:
+            raise ValueError(
+                "GEMINI_API_KEY is missing. Please add it to your .env file locally "
+                "or configure it in Streamlit Cloud Secrets."
+            )
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 
 def ask_gemini(prompt):
@@ -20,9 +39,15 @@ def ask_gemini(prompt):
     max_retries = 7
     base_delay = 2.0
 
+    try:
+        api_client = get_gemini_client()
+    except ValueError as e:
+        print(f"[Error] {e}")
+        raise e
+
     for attempt in range(max_retries):
         try:
-            response = client.models.generate_content(
+            response = api_client.models.generate_content(
                 model=model_name,
                 contents=prompt
             )
