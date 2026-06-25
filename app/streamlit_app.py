@@ -6,6 +6,18 @@ sys.path.append(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 )
 
+# ── Initialize Database ───────────────────────────────────────────────────────
+from database.connection import engine
+from models.base import Base
+from models.candidate import Candidate
+from models.job import Job
+from models.application import Application
+from models.skill import Skill
+from models.agent_log import AgentLog
+
+Base.metadata.create_all(bind=engine)
+
+# ── Imports ───────────────────────────────────────────────────────────────────
 from services.query_service import get_candidates
 from services.database_service import delete_candidate, delete_all_candidates
 from dashboards.dashboard import candidate_chart, match_chart

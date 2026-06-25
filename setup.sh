@@ -9,6 +9,12 @@ echo ""
 # Go to project root
 cd "$(dirname "$0")"
 
+# Skip if running on Streamlit Cloud
+if [ -d "/mount/src" ] || [ -n "$STREAMLIT_SERVER_PORT" ]; then
+    echo "☁️ Detected Streamlit Cloud. Skipping local setup.sh."
+    exit 0
+fi
+
 # ── Step 1: Check Python ────────────────────────────────────────────────────
 echo "🔍 Checking Python..."
 if ! command -v python3 &>/dev/null; then
