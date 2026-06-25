@@ -48,3 +48,6 @@ test_multi_agent.py
 mcp/
 main.py
 .python-version
+docker-compose.yml
+database/schema.sql
+setup.sh
