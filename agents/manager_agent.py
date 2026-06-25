@@ -2,7 +2,34 @@ from agents.resume_agent import analyze_resume
 from agents.skill_agent import extract_skills
 from agents.matching_agent import match_candidate
 
-from mcp.server import IntelliHireMCP
+try:
+    from mcp.server import IntelliHireMCP
+except ModuleNotFoundError:
+    from services.database_service import (
+        save_candidate,
+        save_agent_log,
+        update_logs_candidate_id,
+    )
+
+    class IntelliHireMCP:
+        """
+        Fallback implementation when mcp/ is gitignored (e.g. on Streamlit Cloud).
+        Thin orchestration layer between agents and the database.
+        """
+        def save_candidate_data(self, candidate_data: dict):
+            return save_candidate(candidate_data)
+
+        def log(self, agent, action, candidate_id=None, input_data=None, output_data=None):
+            save_agent_log(
+                agent_name=agent,
+                action=action,
+                candidate_id=candidate_id,
+                input_data=input_data,
+                output_data=output_data,
+            )
+
+        def update_logs_candidate(self, candidate_id, limit=10):
+            update_logs_candidate_id(candidate_id, limit=limit)
 
 
 mcp = IntelliHireMCP()
