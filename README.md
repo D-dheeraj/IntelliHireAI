@@ -109,20 +109,23 @@ IntelliHireAI/
 ├── create_tables.py            ← run once to set up the database
 ├── setup.sh                    ← one-command setup script
 ├── .env.example                ← copy this and fill in your key
-└── docker-compose.yml          ← optional, only if you want PostgreSQL
+├── docker-compose.yml          ← optional PostgreSQL setup via Docker
+└── pyproject.toml              ← project dependencies
 ```
 
 ---
 
 ## Database
 
-By default the app uses SQLite — no configuration needed, it just creates a file called `intellihire.db` in the project folder.
+The app uses SQLite by default — no setup needed. When you run `bash setup.sh` or `python create_tables.py`, a file called `intellihire.db` gets created automatically in the project folder.
 
-If you want to use PostgreSQL instead (more suitable for production or if multiple people are using it simultaneously), start Docker and uncomment the database URL in your `.env`:
+If you prefer PostgreSQL (better for production or multi-user scenarios), Docker is included. Start the database with:
 
 ```bash
 docker compose up -d
 ```
+
+Then uncomment this line in your `.env`:
 
 ```
 DATABASE_URL=postgresql://admin:admin123@localhost:5432/intellihire
