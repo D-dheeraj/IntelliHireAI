@@ -10,7 +10,7 @@ Powered by Google Gemini. Built with Python and Streamlit.
 
 ## Live Demo
 
-**Try it here →** [intellihireai.streamlit.app](https://intellihireai.streamlit.app)
+**Try it here →** [intellihireai.streamlit.app]([https://intellihireai.streamlit.app](https://intellihireai-j7giq7gmf7svpy6whnt8b2.streamlit.app/))
 
 No setup, no account needed. Just open the link and upload a resume.
 
