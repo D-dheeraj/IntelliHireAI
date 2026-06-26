@@ -57,17 +57,23 @@ git clone https://github.com/D-dheeraj/IntelliHireAI.git
 cd IntelliHireAI
 ```
 
-**Step 2 — Set up your API key**
+**Step 2 — Set up your environment**
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and replace the placeholder with your actual key:
+Open `.env` and fill in your values:
 
 ```
-GOOGLE_API_KEY=your_key_here
+GEMINI_API_KEY=your_gemini_key_here
+GEMINI_MODEL=gemini-flash-latest
+DATABASE_URL=sqlite:///intellihire.db
 ```
+
+Get a free Gemini API key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+
+> **Important:** Always set `DATABASE_URL=sqlite:///intellihire.db` in your `.env` when running locally without PostgreSQL. Without this, the app will try to connect to PostgreSQL and fail with a connection error.
 
 **Step 3 — Run the setup script**
 
@@ -154,9 +160,10 @@ streamlit run app/streamlit_app.py
 |---|---|
 | `streamlit: command not found` | Run `bash setup.sh` — it installs everything |
 | App loads but freezes | Check that your API key is in `.env` |
-| API key error | Make sure `.env` exists and has the key |
+| API key error | Make sure `.env` has `GEMINI_API_KEY` set correctly |
 | App opens on port 8502 or 8503 | Port 8501 was busy — the new port still works |
 | Database error on first run | Run `python create_tables.py` manually |
+| `psycopg2.OperationalError: connection refused` | Add `DATABASE_URL=sqlite:///intellihire.db` to your `.env` — PostgreSQL is not required for local use |
 
 ---
 
