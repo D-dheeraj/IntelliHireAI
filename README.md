@@ -53,7 +53,7 @@ You'll need Python 3.11+ and a Google API key. The key is free — get one at [a
 **Step 1 — Clone the repo**
 
 ```bash
-git clone https://github.com/dheerajkumarsingh/IntelliHireAI.git
+git clone https://github.com/D-dheeraj/IntelliHireAI.git
 cd IntelliHireAI
 ```
 
