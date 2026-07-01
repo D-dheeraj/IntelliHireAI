@@ -36,6 +36,11 @@ uploads/
 *.log
 logs/
 
+# ── Node / npm (MCP Inspector dev tool) ─────────────────────────────────────
+node_modules/
+package-lock.json
+package.json
+
 # ── UV ───────────────────────────────────────────────────────────────────────
 uv.lock
 
@@ -45,7 +50,6 @@ test_db.py
 test_multi_agent.py
 
 # ── Internal / Dev Only ───────────────────────────────────────────────────────
-mcp/
 main.py
 .python-version
 database/schema.sql

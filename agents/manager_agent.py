@@ -1,108 +1,198 @@
+"""
+IntelliHire AI — Manager Agent
+================================
+Orchestrates the full resume-screening pipeline:
+
+    Resume Agent  →  extracts candidate info (name, email, experience …)
+    Skill Agent   →  identifies technical & soft skills
+    Matching Agent →  scores candidate vs job description
+
+All database writes and audit logging go through the IntelliHire MCP Server
+(mcp/server.py).  The MCP tools are called *in-process* here, which keeps
+the code 100 % cloud-safe while still using the real FastMCP tool definitions
+that can be exercised via `mcp dev mcp/server.py` locally.
+
+Architecture
+------------
+                  ┌─────────────────────────────┐
+                  │      Manager Agent          │
+                  │  (this file)                │
+                  └──────────┬──────────────────┘
+           ┌─────────────────┼─────────────────┐
+           ▼                 ▼                 ▼
+    Resume Agent       Skill Agent      Matching Agent
+    (Gemini call)      (Gemini call)    (Gemini call)
+           └─────────────────┼─────────────────┘
+                             ▼
+                  ┌──────────────────────┐
+                  │  IntelliHire MCP     │
+                  │  Server (FastMCP)    │
+                  │  mcp/server.py       │
+                  │  ─────────────────   │
+                  │  • save_candidate_record  │
+                  │  • log_agent_action       │
+                  │  • link_logs_to_candidate │
+                  │  • get_all_candidates     │
+                  │  • get_candidate_audit_trail│
+                  │  • remove_candidate       │
+                  └──────────┬───────────┘
+                             ▼
+                      SQLite / PostgreSQL DB
+"""
+
+import importlib.util
+import os
+import sys
+
 from agents.resume_agent import analyze_resume
 from agents.skill_agent import extract_skills
 from agents.matching_agent import match_candidate
 
-try:
-    from mcp.server import IntelliHireMCP
-except ModuleNotFoundError:
-    from services.database_service import (
-        save_candidate,
-        save_agent_log,
-        update_logs_candidate_id,
+# ── Import MCP tool functions ──────────────────────────────────────────────────
+# We load mcp/server.py via importlib to avoid a name collision with the
+# `mcp` package's own `mcp.server` sub-module. The tool functions defined
+# with @mcp.tool() are called in-process here (cloud-safe), while the same
+# server can be run standalone with `mcp dev mcp/server.py` for local demos.
+_server_path = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "mcp", "server.py",
+)
+_spec = importlib.util.spec_from_file_location("intellihire_mcp_server", _server_path)
+_mcp_module = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_mcp_module)
+
+save_candidate_record    = _mcp_module.save_candidate_record
+log_agent_action         = _mcp_module.log_agent_action
+link_logs_to_candidate   = _mcp_module.link_logs_to_candidate
+get_all_candidates       = _mcp_module.get_all_candidates
+get_candidate_audit_trail = _mcp_module.get_candidate_audit_trail
+
+
+def run_intellihire(resume_text: str, job_description: str) -> dict:
+    """
+    Full IntelliHire pipeline: parse resume → extract skills → match job.
+
+    Takes raw resume text and a job description, runs it through all three
+    specialist agents, persists everything via MCP tools, and returns a
+    structured result dict.
+
+    Args:
+        resume_text:     Plain-text content of the uploaded resume.
+        job_description: Job requirements entered by the recruiter.
+
+    Returns:
+        dict with keys: candidate, resume, skills, match
+    """
+
+    # ── Step 0: Log pipeline start ─────────────────────────────────────────────
+    log_agent_action(
+        agent_name="Manager Agent",
+        action="Workflow started",
     )
 
-    class IntelliHireMCP:
-        """
-        Fallback implementation when mcp/ is gitignored (e.g. on Streamlit Cloud).
-        Thin orchestration layer between agents and the database.
-        """
-        def save_candidate_data(self, candidate_data: dict):
-            return save_candidate(candidate_data)
-
-        def log(self, agent, action, candidate_id=None, input_data=None, output_data=None):
-            save_agent_log(
-                agent_name=agent,
-                action=action,
-                candidate_id=candidate_id,
-                input_data=input_data,
-                output_data=output_data,
-            )
-
-        def update_logs_candidate(self, candidate_id, limit=10):
-            update_logs_candidate_id(candidate_id, limit=limit)
-
-
-mcp = IntelliHireMCP()
-
-
-def run_intellihire(resume_text, job_description):
-    """
-    Takes raw resume text and a job description, runs it through all three agents,
-    saves everything to the database, and returns the results.
-    """
-
-    mcp.log(agent="Manager Agent", action="Workflow started")
-
-    # first pass - get the basic candidate info
-    mcp.log(agent="Resume Agent", action="Analyzing resume")
+    # ── Step 1: Resume Agent — extract structured candidate info ───────────────
+    log_agent_action(
+        agent_name="Resume Agent",
+        action="Analyzing resume",
+        input_data=resume_text[:300],   # store first 300 chars for audit
+    )
     resume_data = analyze_resume(resume_text)
-    mcp.log(
-        agent="Resume Agent",
+    log_agent_action(
+        agent_name="Resume Agent",
         action="Resume analyzed",
-        output_data=str(resume_data)
+        output_data=str(resume_data),
     )
 
-    # now pull out all the skills from the same resume
-    mcp.log(agent="Skill Agent", action="Extracting skills")
+    # ── Step 2: Skill Agent — identify technical & soft skills ─────────────────
+    log_agent_action(
+        agent_name="Skill Agent",
+        action="Extracting skills",
+    )
     skill_data = extract_skills(resume_text)
-    mcp.log(
-        agent="Skill Agent",
+    log_agent_action(
+        agent_name="Skill Agent",
         action="Skills extracted",
-        output_data=skill_data.get("skills_text", "")
+        output_data=skill_data.get("skills_text", ""),
     )
 
-    # compare skills against job requirements and get a score
-    mcp.log(agent="Matching Agent", action="Matching against job")
+    # ── Step 3: Matching Agent — score candidate vs job description ────────────
+    log_agent_action(
+        agent_name="Matching Agent",
+        action="Matching candidate against job description",
+        input_data=skill_data.get("skills_text", ""),
+    )
     match_data = match_candidate(
         skill_data.get("skills_text", ""),
-        job_description
+        job_description,
     )
-    mcp.log(
-        agent="Matching Agent",
+    log_agent_action(
+        agent_name="Matching Agent",
         action="Match complete",
-        output_data=str(match_data)
+        output_data=str(match_data),
     )
 
-    # put everything together into one dict before saving
-    candidate_record = {
-        "name":           resume_data.get("name"),
-        "email":          resume_data.get("email"),
-        "phone":          resume_data.get("phone"),
-        "experience":     resume_data.get("experience"),
-        "education":      resume_data.get("education"),
-        "resume_text":    resume_text,
-        "skills":         skill_data.get("skills_text", ""),
-        "match_score":    match_data.get("match_score", 0),
-        "ai_summary":     resume_data.get("ai_summary", ""),
-        "recommendation": match_data.get("recommendation", ""),
-    }
+    # ── Step 4: Persist via MCP — save_candidate_record tool ──────────────────
+    log_agent_action(
+        agent_name="Manager Agent",
+        action="Persisting candidate record via MCP",
+    )
+    saved = save_candidate_record(
+        name=resume_data.get("name"),
+        email=resume_data.get("email"),
+        phone=resume_data.get("phone"),
+        experience=resume_data.get("experience"),
+        education=resume_data.get("education"),
+        resume_text=resume_text,
+        skills=skill_data.get("skills_text", ""),
+        match_score=match_data.get("match_score", 0),
+        ai_summary=resume_data.get("ai_summary", ""),
+        recommendation=match_data.get("recommendation", ""),
+    )
 
-    # save to database
-    candidate = mcp.save_candidate_data(candidate_record)
+    candidate_id = saved.get("candidate_id")
 
-    # link the logs we just created to this candidate
-    if candidate:
-        mcp.update_logs_candidate(candidate.candidate_id)
+    # ── Step 5: Link audit logs to this candidate via MCP ─────────────────────
+    if candidate_id:
+        link_logs_to_candidate(candidate_id=candidate_id, limit=10)
 
-    mcp.log(
-        agent="Manager Agent",
+    # ── Step 6: Log workflow completion ────────────────────────────────────────
+    log_agent_action(
+        agent_name="Manager Agent",
         action="Workflow complete",
-        candidate_id=candidate.candidate_id if candidate else None
+        candidate_id=candidate_id,
+        output_data=f"score={match_data.get('match_score', 0)}, "
+                    f"rec={match_data.get('recommendation', '')}",
     )
+
+    # ── Fetch the persisted ORM object for the Streamlit UI ───────────────────
+    # The UI expects a Candidate ORM object at result["candidate"]. We retrieve
+    # it from the DB so the Streamlit app doesn't need any changes.
+    candidate_orm = _get_candidate_orm(candidate_id)
 
     return {
-        "candidate":   candidate,
-        "resume":      resume_data,
-        "skills":      skill_data,
-        "match":       match_data,
+        "candidate": candidate_orm,
+        "resume":    resume_data,
+        "skills":    skill_data,
+        "match":     match_data,
     }
+
+
+def _get_candidate_orm(candidate_id: int | None):
+    """
+    Fetch the ORM Candidate object by ID for the Streamlit UI layer.
+    Returns None if candidate_id is None or lookup fails.
+    """
+    if candidate_id is None:
+        return None
+    try:
+        from database.connection import SessionLocal
+        from models.candidate import Candidate
+
+        db = SessionLocal()
+        candidate = db.query(Candidate).filter(
+            Candidate.candidate_id == candidate_id
+        ).first()
+        db.close()
+        return candidate
+    except Exception:
+        return None
